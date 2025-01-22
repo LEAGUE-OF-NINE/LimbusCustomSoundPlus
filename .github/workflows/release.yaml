@@ -27,7 +27,7 @@ jobs:
       uses: microsoft/setup-msbuild@v2
 
     - name: Build Mod DLL
-      run: ./bin/build.ps1 ${{ github.ref_name }}
+      run: ./Scripts/build.ps1 ${{ github.ref_name }}
 
     - name: Prepare Release
       run: |
