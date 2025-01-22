@@ -39,7 +39,7 @@ jobs:
       with:
         name: build
         path: |
-          Release/ModData
+          src/Release/ModData
   
   release:
     runs-on: ubuntu-latest
