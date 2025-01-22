@@ -1,0 +1,68 @@
+name: LimbusCustomSound Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        lfs: true
+
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 6.0.x
+
+    - name: Setup MSBuild.exe
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build Mod DLL
+      run: ./bin/build.ps1 ${{ github.ref_name }}
+
+    - name: Prepare Release
+      run: |
+        New-Item -ItemType Directory -Path "Release/ModData" -Force
+        Copy-Item -Path Release/LimbusCustomSound.dll "Release/ModData/LimbusCustomSound_${{ github.ref_name }}.dll" 
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build
+        path: |
+          Release/ModData
+  
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+        
+    needs: build
+
+    steps: 
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          
+      - uses: actions/download-artifact@v4
+        with:
+          name: build
+          path: LimbusCustomSound
+
+      - run: zip -r LimbusCustomSound_${{ github.ref_name }}.zip LimbusCustomSound
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: "LimbusCustomSound_${{ github.ref_name }}.zip"
