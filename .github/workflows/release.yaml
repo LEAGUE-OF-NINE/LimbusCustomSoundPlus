@@ -31,8 +31,8 @@ jobs:
 
     - name: Prepare Release
       run: |
-        New-Item -ItemType Directory -Path "Release/ModData" -Force
-        Copy-Item -Path Release/LimbusCustomSound_BIE.dll "Release/ModData/LimbusCustomSound_${{ github.ref_name }}.dll" 
+        New-Item -ItemType Directory -Path "src/Release/ModData" -Force
+        Copy-Item -Path src/Release/LimbusCustomSound_BIE.dll "src/Release/ModData/LimbusCustomSound_${{ github.ref_name }}.dll" 
       
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
