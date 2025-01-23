@@ -1,6 +1,6 @@
 # LimbusCustomSound
 
-A simple mod that lets you replace Limbus Company's sound effects and voices with your own custom audio files.
+A simple mod that lets you replace Limbus Company's sounds with your own custom audio files.
 
 ## Installation
 
