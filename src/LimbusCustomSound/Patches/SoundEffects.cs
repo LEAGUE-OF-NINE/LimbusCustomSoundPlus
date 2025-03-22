@@ -54,22 +54,28 @@ public static class SoundEffects
 
     [HarmonyPatch(typeof(FMOD.Studio.EventInstance), nameof(FMOD.Studio.EventInstance.start))]
     [HarmonyPrefix]
-    // ReSharper disable once InconsistentNaming
     private static void PatchSoundEventStart(FMOD.Studio.EventInstance __instance)
     {
+        ModLogger.Debug($"[FMOD] start called for instance: {__instance}");
+
         if (!PatchedEvents.TryGetValue(__instance, out var sound))
         {
+            ModLogger.Debug($"[FMOD] No replacement found, proceeding with original event.");
             return;
         }
 
         if (MainVoiceEvents.Contains(__instance))
         {
+            ModLogger.Debug($"[FMOD] Detected main voice event. Replacing _mainVoice.");
             _mainVoice?.Release();
             _mainVoice = sound;
             MainVoiceEvents.Remove(__instance);
         }
-        
+
+        ModLogger.Debug($"[FMOD] Muting original event instance.");
         __instance.setVolume(0);
+
+        ModLogger.Debug($"[FMOD] Starting replacement sound: {sound}");
         sound.Start();
     }
 
@@ -138,20 +144,34 @@ public static class SoundEffects
     [HarmonyPostfix]
     // ReSharper disable once InconsistentNaming
     private static void PatchGetEventLength(FMOD.Studio.EventInstance soundEvent, ref float __result)
-	{
-	    if (!PatchedEvents.TryGetValue(soundEvent, out var sound))
-	    {
-		    return;
-	    }
+    {
+        if (!PatchedEvents.TryGetValue(soundEvent, out var sound))
+        {
+            
+            return;
+        }
 
-	    __result = sound.Duration / 1000f;
-	}
+        ModLogger.Debug($"[FMOD] Got sound duration: {sound.Duration}");
+        __result = sound.Duration / 1000f;
+    }
 
     private static void StretchToMatch(FMOD.Studio.EventInstance soundEvent, SoundInstance sound)
     {
         soundEvent.getDescription(out var eventDescription);
-		eventDescription.getLength(out var duration);
+        eventDescription.getLength(out var duration);
 
-        soundEvent.setPitch(sound.Duration / duration);
+        ModLogger.Debug($"[FMOD] Got event duration: {duration}ms");
+
+        if (duration <= 0)
+        {
+            ModLogger.Debug("[FMOD] Skipping StretchToMatch because event duration is invalid.");
+            // Apply default behavior for sounds without a valid duration
+            soundEvent.setPitch(1);  // Set pitch to normal
+            return;
+        }
+
+        float newPitch = (float)sound.Duration / duration;
+        ModLogger.Debug($"[FMOD] Adjusting pitch: {newPitch}");
+        soundEvent.setPitch(1);
     }
 }
