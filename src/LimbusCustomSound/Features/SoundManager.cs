@@ -17,7 +17,7 @@ public enum SoundType
 public static class SoundManager
 {
     private const string SoundDirectory = "Sound";
-    private const FMOD.MODE SoundLoadMode = FMOD.MODE.DEFAULT;
+    private const FMOD.MODE SoundLoadMode = FMOD.MODE.CREATESTREAM;
     private static readonly Dictionary<SoundType, FMOD.ChannelGroup> ChannelGroups = new();
     private static readonly HashSet<string> RegisteredReplacements = new();
     private static readonly HashSet<SoundInstance> ActiveSounds = new();
@@ -29,23 +29,46 @@ public static class SoundManager
         public readonly uint Duration;
         public readonly string EventPath;
         public bool Released { get; private set; }
-  
+
         public SoundInstance(string eventPath, FMOD.ChannelGroup channelGroup)
         {
             EventPath = eventPath;
             var system = RuntimeManager.CoreSystem;
+            string filePath = GetFilePath(eventPath);
 
-            system.createSound(GetFilePath(eventPath), SoundLoadMode, out Sound);
+            if (!File.Exists(filePath))
+            {
+                ModLogger.Debug($"[FMOD] Sound file not found: {filePath}");
+                return;
+            }
+
+            // Attempt to create the sound
+            FMOD.RESULT result = system.createSound(filePath, SoundLoadMode, out Sound);
+            if (result != FMOD.RESULT.OK)
+            {
+                ModLogger.Debug($"[FMOD] Failed to load sound: {filePath}, Error: {result}");
+                return;
+            }
+
+            // Validate sound format
+            FMOD.SOUND_TYPE soundType;
+            FMOD.OPENSTATE openState;
+            int channels, bits;
+
+            Sound.getFormat(out soundType, out _, out channels, out bits);
+            Sound.getOpenState(out openState, out _, out _, out _);
+
+            if (soundType != FMOD.SOUND_TYPE.WAV || openState != FMOD.OPENSTATE.READY || channels <= 0 || bits <= 0)
+            {
+                ModLogger.Debug($"[FMOD] Incompatible or corrupted sound file: {filePath}");
+                Sound.release();
+                return;
+            }
+
+            // Get sound duration
             Sound.getLength(out Duration, FMOD.TIMEUNIT.MS);
             system.playSound(Sound, channelGroup, true, out Channel);
-
-            // TODO: Add 3D sound support
-            // if (Camera.main != null)
-            // {
-            //     Channel.set3DAttributes(Camera.main.transform.position.To3DAttributes());
-            // }
         }
-
         public bool Finished()
         {
             Channel.isPlaying(out bool isPlaying);
@@ -158,7 +181,6 @@ public static class SoundManager
 
     private static SoundType GetSoundType(string eventPath)
     {
-        // TODO: Implement sound type detection
         return SoundType.Unknown;
     }
 }
