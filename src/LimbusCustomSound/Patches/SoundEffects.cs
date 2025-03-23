@@ -4,6 +4,8 @@ using FMODUnity;
 
 using SoundInstance = LimbusCustomSound.Features.SoundManager.SoundInstance;
 using ModLogger = LimbusCustomSound.Utils.Logger;
+using LimbusCustomSound.Features;
+using System;
 
 namespace LimbusCustomSound.Patches;
 
@@ -29,10 +31,27 @@ public static class SoundEffects
 
         if (!Features.SoundManager.HasReplacement(eventPath))
         {
+            // Makes sure replaced music stops when other music is playing
+            if (Features.SoundManager.GetSoundType(eventPath) == SoundType.Music)
+            {
+                try
+                {
+                    Features.SoundManager.ReleaseCurrentlyActiveMusicInstance();
+                }
+                catch (Exception ex)
+                {
+                    ModLogger.Warning($"[FMOD] Failed to release currently active music instance");
+                }
+            }
+
             ModLogger.Debug($"[FMOD] Created event instance for {eventPath} (No replacement)");
             return;
         }
 
+        // Pause original so it doesn't overlap with the replaced sound
+        __result.setPaused(true);
+
+        // play new sound
         var sound = Features.SoundManager.CreateSound(eventPath);
         StretchToMatch(__result, sound);
         PatchedEvents[__result] = sound;
@@ -103,6 +122,17 @@ public static class SoundEffects
     // ReSharper disable once InconsistentNaming
     private static bool PatchSetPaused(FMOD.Studio.EventInstance __instance, bool paused)
     {
+        __instance.getDescription(out var eventDescription);
+        eventDescription.getID(out var guid);
+
+        if (RuntimeManager.StudioSystem.lookupPath(guid, out var eventPath) == FMOD.RESULT.OK)
+        {
+            ModLogger.Debug($"[FMOD] Pausing event: {eventPath}, Paused: {paused}");
+        }
+        else
+        {
+            ModLogger.Debug("[FMOD] Failed to retrieve event path.");
+        }
         if (!PatchedEvents.TryGetValue(__instance, out var sound))
         {
             return true;
@@ -117,6 +147,18 @@ public static class SoundEffects
     // ReSharper disable once InconsistentNaming
     private static void PatchSoundEventStop(FMOD.Studio.EventInstance __instance)
     {
+        __instance.getDescription(out var eventDescription);
+        eventDescription.getID(out var guid);
+
+        if (RuntimeManager.StudioSystem.lookupPath(guid, out var eventPath) == FMOD.RESULT.OK)
+        {
+            ModLogger.Debug($"[FMOD] Stopping event: {eventPath}");
+        }
+        else
+        {
+            ModLogger.Debug("[FMOD] Failed to retrieve event path.");
+        }
+
         if (!PatchedEvents.TryGetValue(__instance, out var sound))
         {
             return;
@@ -147,7 +189,7 @@ public static class SoundEffects
     {
         if (!PatchedEvents.TryGetValue(soundEvent, out var sound))
         {
-            
+
             return;
         }
 
@@ -172,6 +214,6 @@ public static class SoundEffects
 
         float newPitch = (float)sound.Duration / duration;
         ModLogger.Debug($"[FMOD] Adjusting pitch: {newPitch}");
-        soundEvent.setPitch(1);
+        soundEvent.setPitch(newPitch);
     }
 }
