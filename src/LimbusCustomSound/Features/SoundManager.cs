@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using FMODUnity;
 
 using ModLogger = LimbusCustomSound.Utils.Logger;
+using System.Text.RegularExpressions;
 
 namespace LimbusCustomSound.Features;
 
@@ -22,6 +23,36 @@ public static class SoundManager
     private static readonly HashSet<string> RegisteredReplacements = new();
     private static readonly HashSet<SoundInstance> ActiveSounds = new();
 
+    private static SoundInstance ActiveMusicInstance;
+    private static readonly Dictionary<string, SoundType> SoundTypeMappings = new()
+        {
+            { "BGM/", SoundType.Music },
+            { "VOICE/", SoundType.Voice },
+            { "SFX/", SoundType.Effect }
+        };
+
+    public static SoundType GetSoundType(string eventPath)
+    {
+        foreach (var mapping in SoundTypeMappings)
+        {
+            if (eventPath.Contains(mapping.Key))
+            {
+                return mapping.Value;
+            }
+        }
+
+        return SoundType.Unknown;
+    }
+
+    public static void ReleaseCurrentlyActiveMusicInstance()
+    {
+        if (ActiveMusicInstance != null)
+        {
+            ActiveMusicInstance.Release();
+            ActiveMusicInstance = null;
+        }
+    }
+
     public class SoundInstance
     {
         public readonly FMOD.Sound Sound;
@@ -30,7 +61,7 @@ public static class SoundManager
         public readonly string EventPath;
         public bool Released { get; private set; }
 
-        public SoundInstance(string eventPath, FMOD.ChannelGroup channelGroup)
+        public SoundInstance(string eventPath, FMOD.ChannelGroup channelGroup, bool paused, FMOD.MODE soundLoadMode)
         {
             EventPath = eventPath;
             var system = RuntimeManager.CoreSystem;
@@ -43,7 +74,7 @@ public static class SoundManager
             }
 
             // Attempt to create the sound
-            FMOD.RESULT result = system.createSound(filePath, SoundLoadMode, out Sound);
+            FMOD.RESULT result = system.createSound(filePath, soundLoadMode, out Sound);
             if (result != FMOD.RESULT.OK)
             {
                 ModLogger.Debug($"[FMOD] Failed to load sound: {filePath}, Error: {result}");
@@ -67,7 +98,7 @@ public static class SoundManager
 
             // Get sound duration
             Sound.getLength(out Duration, FMOD.TIMEUNIT.MS);
-            system.playSound(Sound, channelGroup, true, out Channel);
+            system.playSound(Sound, channelGroup, paused, out Channel);
         }
         public bool Finished()
         {
@@ -165,10 +196,40 @@ public static class SoundManager
         {
             return null;
         }
+        bool paused = false;
+        FMOD.MODE soundLoadMode = FMOD.MODE.DEFAULT;
 
         var soundType = GetSoundType(eventPath);
         var channelGroup = ChannelGroups[soundType];
-        return new SoundInstance(eventPath, channelGroup);
+
+        ModLogger.Debug($"Got sound type: {soundType}");
+
+        // If it's music and already playing, return the existing instance
+        if (soundType == SoundType.Music && ActiveMusicInstance != null && !ActiveMusicInstance.Finished())
+        {
+            ModLogger.Debug($"Music {eventPath} is already playing, skipping creation.");
+            return ActiveMusicInstance;
+        }
+
+        // Stop the currently playing music before playing a new one
+        if (soundType == SoundType.Music && ActiveMusicInstance != null)
+        {
+            ReleaseCurrentlyActiveMusicInstance();
+        }
+
+        if (soundType == SoundType.Music)
+        {
+            soundLoadMode = FMOD.MODE.LOOP_NORMAL;
+        }
+
+        var newInstance = new SoundInstance(eventPath, channelGroup, paused, soundLoadMode);
+
+        if (soundType == SoundType.Music)
+        {
+            ActiveMusicInstance = newInstance;
+        }
+
+        return newInstance;
     }
 
     private static string GetFilePath(string eventPath)
@@ -177,10 +238,5 @@ public static class SoundManager
         var filePath = Path.Combine(Core.PluginInfo.ModPath, SoundDirectory, fileName);
 
         return filePath;
-    }
-
-    private static SoundType GetSoundType(string eventPath)
-    {
-        return SoundType.Unknown;
     }
 }
