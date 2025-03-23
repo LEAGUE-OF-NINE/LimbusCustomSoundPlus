@@ -140,6 +140,13 @@ public static class SoundManager
     {
         directory ??= Path.Combine(Core.PluginInfo.ModPath, SoundDirectory);
 
+        // Check if the directory exists, and create it if it doesn't
+        if (!Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+            ModLogger.Message($"Created missing sound directory: {directory}");
+        }
+
         var directoryInfo = new DirectoryInfo(directory);
         var files = directoryInfo.GetFiles("*.wav", SearchOption.AllDirectories);
 
